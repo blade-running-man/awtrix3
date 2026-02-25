@@ -1,78 +1,169 @@
 #ifndef GifPlayer_H
 #define GifPlayer_H
 #include <LittleFS.h>
+
 class GifPlayer
 {
+  // ---- PUBLIC API ----
 public:
-#define ERROR_NON 0
-#define ERROR_FILEOPEN 1
-#define ERROR_FILENOTGIF 2
-#define ERROR_BADGIFFORMAT 3
-#define ERROR_UNKNOWNCONTROLEXT 4
-#define ERROR_FINISHED 5
-#define WIDTH 32
-#define HEIGHT 8
-  uint8_t currentFrame;
+  uint8_t currentFrame = 0;
 
+  void setMatrix(FastLED_NeoMatrix *matrix)
+  {
+    mtx = matrix;
+  }
+
+  uint8_t getFrame()
+  {
+    return currentFrame;
+  }
+
+  int playGif(int x, int y, File *imageFile, uint32_t frame = 0)
+  {
+    offsetX = x;
+    offsetY = y;
+
+    if (imageFile->name() == file.name())
+    {
+      drawFrame();
+      return lsdWidth;
+    }
+
+    currentFrame = 0;
+    file = *imageFile;
+
+    memset(FrameBuffer, 0, sizeof(FrameBuffer));
+    memset(gifPalette, 0, sizeof(gifPalette));
+    memset(lzwImageData, 0, sizeof(lzwImageData));
+    memset(imageData, 0, sizeof(imageData));
+    memset(imageDataBU, 0, sizeof(imageDataBU));
+    memset(stack, 0, sizeof(stack));
+    memset(suffix, 0, sizeof(suffix));
+    memset(prefix, 0, sizeof(prefix));
+
+    initGifFromFile();
+    if (frame != 0)
+    {
+      do
+      {
+        drawFrame(true);
+      } while (currentFrame < frame);
+    }
+    else
+    {
+      drawFrame();
+    }
+
+    return lsdWidth;
+  }
+
+  // ---- PRIVATE IMPLEMENTATION ----
 private:
-  long lastFrameTime;
-  int newframeDelay;
-  CRGB FrameBuffer[HEIGHT][WIDTH];
-  bool lastFrameDrawn = false;
-  unsigned long nextFrameTime = 0;
-#define GIFHDRTAGNORM "GIF87a"
-#define GIFHDRTAGNORM1 "GIF89a"
-#define GIFHDRSIZE 6
-  FastLED_NeoMatrix *mtx;
-#define COLORTBLFLAG 0x80
-#define INTERLACEFLAG 0x40
-#define TRANSPARENTFLAG 0x01
-#define NO_TRANSPARENT_INDEX -1
-#define DISPOSAL_NONE 0
-#define DISPOSAL_LEAVE 1
-#define DISPOSAL_BACKGROUND 2
-#define DISPOSAL_RESTORE 3
+  // --- Constants ---
+  static constexpr int kWidth = 32;
+  static constexpr int kHeight = 8;
+  static constexpr int kMaxPixels = kWidth * kHeight;
 
-  typedef struct
+  static constexpr int kErrorNone = 0;
+  static constexpr int kErrorBadGifFormat = 3;
+  static constexpr int kErrorUnknownControlExt = 4;
+  static constexpr int kErrorFinished = 5;
+
+  static constexpr int kGifHdrSize = 6;
+  static constexpr uint8_t kColorTableFlag = 0x80;
+  static constexpr uint8_t kInterlaceFlag = 0x40;
+  static constexpr uint8_t kTransparentFlag = 0x01;
+  static constexpr int kNoTransparentIndex = -1;
+
+  static constexpr int kDisposalNone = 0;
+  static constexpr int kDisposalLeave = 1;
+  static constexpr int kDisposalBackground = 2;
+  static constexpr int kDisposalRestore = 3;
+
+  static constexpr int kLzwMaxBits = 10;
+  static constexpr int kLzwTableSize = (1 << kLzwMaxBits);
+
+  const uint16_t kMask[17] = {
+      0x0000, 0x0001, 0x0003, 0x0007,
+      0x000F, 0x001F, 0x003F, 0x007F,
+      0x00FF, 0x01FF, 0x03FF, 0x07FF,
+      0x0FFF, 0x1FFF, 0x3FFF, 0x7FFF,
+      0xFFFF};
+
+  // --- Types ---
+  struct RGB
   {
     byte Red;
     byte Green;
     byte Blue;
-  } _RGB;
-  int lsdWidth;
-  int lsdHeight;
-  int lsdPackedField;
-  int lsdAspectRatio;
-  int lsdBackgroundIndex;
-  int offsetX;
-  int offsetY;
-  int tbiImageX;
-  int tbiImageY;
-  int tbiWidth;
-  int tbiHeight;
-  int tbiPackedBits;
-  boolean tbiInterlaced;
+  };
 
-public:
-  int frameDelay;
-  int transparentColorIndex;
-  int prevBackgroundIndex;
-  int prevDisposalMethod;
-  int disposalMethod;
-  int lzwCodeSize;
-  boolean keyFrame;
-  int rectX;
-  int rectY;
-  int rectWidth;
-  int rectHeight;
-  int colorCount;
-  _RGB gifPalette[256];
+  // --- Display state ---
+  FastLED_NeoMatrix *mtx = nullptr;
+  int offsetX = 0;
+  int offsetY = 0;
+
+  // --- GIF header state ---
+  int lsdWidth = 0;
+  int lsdHeight = 0;
+  int lsdPackedField = 0;
+  int lsdBackgroundIndex = 0;
+
+  // --- Frame timing ---
+  unsigned long lastFrameTime = 0;
+  int newframeDelay = 0;
+  int frameDelay = 0;
+
+  // --- Frame decode state ---
+  CRGB FrameBuffer[kHeight][kWidth];
+  RGB gifPalette[256];
+  byte imageData[kMaxPixels];
+  byte imageDataBU[kMaxPixels];
+  int transparentColorIndex = kNoTransparentIndex;
+  int prevBackgroundIndex = 0;
+  int prevDisposalMethod = kDisposalNone;
+  int disposalMethod = kDisposalNone;
+  boolean keyFrame = true;
+  int colorCount = 0;
+  int rectX = 0;
+  int rectY = 0;
+  int rectWidth = 0;
+  int rectHeight = 0;
+
+  // --- Table-based image state ---
+  int tbiImageX = 0;
+  int tbiImageY = 0;
+  int tbiWidth = 0;
+  int tbiHeight = 0;
+  int tbiPackedBits = 0;
+  boolean tbiInterlaced = false;
+
+  // --- LZW decoder state ---
   byte lzwImageData[1280];
-  char tempBuffer[260];
-  File file;
-  byte imageData[WIDTH * HEIGHT];
-  byte imageDataBU[WIDTH * HEIGHT];
+  int lzwCodeSize = 0;
+  byte *pbuf = nullptr;
+  int bbits = 0;
+  int bbuf = 0;
+  int cursize = 0;
+  int curmask = 0;
+  int codesize = 0;
+  int clear_code = 0;
+  int end_code = 0;
+  int newcodes = 0;
+  int top_slot = 0;
+  int slot = 0;
+  int fc = 0;
+  int oc = 0;
+  int bs = 0;
+  byte *sp = nullptr;
+  byte stack[kLzwTableSize];
+  byte suffix[kLzwTableSize];
+  uint16_t prefix[kLzwTableSize];
 
+  // --- File state ---
+  File file;
+
+  // --- File I/O ---
   void backUpStream(int n)
   {
     file.seek(file.position() - n, SeekSet);
@@ -80,8 +171,7 @@ public:
 
   int readByte()
   {
-    int b = file.read();
-    return b;
+    return file.read();
   }
 
   int readWord()
@@ -93,17 +183,18 @@ public:
 
   int readIntoBuffer(void *buffer, int numberOfBytes)
   {
-    int result = file.read(static_cast<uint8_t *>(buffer), numberOfBytes);
-    return result;
+    return file.read(static_cast<uint8_t *>(buffer), numberOfBytes);
   }
 
+  // --- Image data ops (with bounds checks) ---
   void fillImageDataRect(byte colorIndex, int x, int y, int width, int height)
   {
-    int yOffset;
-    for (int yy = y; yy < height + y; yy++)
+    int yEnd = min(height + y, kHeight);
+    int xEnd = min(width + x, kWidth);
+    for (int yy = max(y, 0); yy < yEnd; yy++)
     {
-      yOffset = yy * WIDTH;
-      for (int xx = x; xx < width + x; xx++)
+      int yOffset = yy * kWidth;
+      for (int xx = max(x, 0); xx < xEnd; xx++)
       {
         imageData[yOffset + xx] = colorIndex;
       }
@@ -117,29 +208,57 @@ public:
 
   void copyImageDataRect(byte *src, byte *dst, int x, int y, int width, int height)
   {
-
-    int yOffset, offset;
-
-    for (int yy = y; yy < height + y; yy++)
+    int yEnd = min(height + y, kHeight);
+    int xEnd = min(width + x, kWidth);
+    for (int yy = max(y, 0); yy < yEnd; yy++)
     {
-      yOffset = yy * WIDTH;
-      for (int xx = x; xx < width + x; xx++)
+      int yOffset = yy * kWidth;
+      for (int xx = max(x, 0); xx < xEnd; xx++)
       {
-        offset = yOffset + xx;
+        int offset = yOffset + xx;
         dst[offset] = src[offset];
       }
     }
   }
 
-  void parsePlainTextExtension()
+  // --- GIF structure parsing ---
+  bool initGifFromFile()
   {
-    byte len = readByte();
-    readIntoBuffer(tempBuffer, len);
-    len = readByte();
-    while (len != 0)
+    if (!parseGifHeader())
+      return false;
+    parseLogicalScreenDescriptor();
+    parseGlobalColorTable();
+    return true;
+  }
+
+  bool parseGifHeader()
+  {
+    char buffer[10];
+    readIntoBuffer(buffer, kGifHdrSize);
+    return (strncmp(buffer, "GIF87a", kGifHdrSize) == 0) ||
+           (strncmp(buffer, "GIF89a", kGifHdrSize) == 0);
+  }
+
+  void parseLogicalScreenDescriptor()
+  {
+    lsdWidth = readWord();
+    lsdHeight = readWord();
+    if (lsdWidth > kWidth)
+      lsdWidth = kWidth;
+    if (lsdHeight > kHeight)
+      lsdHeight = kHeight;
+    lsdPackedField = readByte();
+    lsdBackgroundIndex = readByte();
+    readByte(); // aspect ratio (unused)
+  }
+
+  void parseGlobalColorTable()
+  {
+    if (lsdPackedField & kColorTableFlag)
     {
-      readIntoBuffer(tempBuffer, len);
-      len = readByte();
+      colorCount = 1 << ((lsdPackedField & 7) + 1);
+      int colorTableBytes = sizeof(RGB) * colorCount;
+      readIntoBuffer(gifPalette, colorTableBytes);
     }
   }
 
@@ -150,10 +269,9 @@ public:
     frameDelay = readWord();
     transparentColorIndex = readByte();
 
-    if ((packedBits & TRANSPARENTFLAG) == 0)
+    if ((packedBits & kTransparentFlag) == 0)
     {
-      // Indicate no transparent index
-      transparentColorIndex = NO_TRANSPARENT_INDEX;
+      transparentColorIndex = kNoTransparentIndex;
     }
     disposalMethod = (packedBits >> 2) & 7;
     if (disposalMethod > 3)
@@ -161,11 +279,25 @@ public:
       disposalMethod = 0;
     }
 
-    readByte(); // Toss block end
+    readByte(); // block end
+  }
+
+  void parsePlainTextExtension()
+  {
+    char tempBuffer[260];
+    byte len = readByte();
+    readIntoBuffer(tempBuffer, len);
+    len = readByte();
+    while (len != 0)
+    {
+      readIntoBuffer(tempBuffer, len);
+      len = readByte();
+    }
   }
 
   void parseApplicationExtension()
   {
+    char tempBuffer[260];
     memset(tempBuffer, 0, sizeof(tempBuffer));
     byte len = readByte();
     readIntoBuffer(tempBuffer, len);
@@ -179,6 +311,7 @@ public:
 
   void parseCommentExtension()
   {
+    char tempBuffer[260];
     byte len = readByte();
     while (len != 0)
     {
@@ -188,19 +321,7 @@ public:
     }
   }
 
-  int parseGIFFileTerminator()
-  {
-    byte b = readByte();
-    if (b != 0x3B)
-    {
-      return ERROR_BADGIFFORMAT;
-    }
-    else
-    {
-      return ERROR_NON;
-    }
-  }
-
+  // --- Frame decode and render ---
   unsigned long parseTableBasedImage()
   {
     tbiImageX = readWord();
@@ -208,19 +329,34 @@ public:
     tbiWidth = readWord();
     tbiHeight = readWord();
     tbiPackedBits = readByte();
-    tbiInterlaced = ((tbiPackedBits & INTERLACEFLAG) != 0);
-    boolean localColorTable = ((tbiPackedBits & COLORTBLFLAG) != 0);
+    tbiInterlaced = ((tbiPackedBits & kInterlaceFlag) != 0);
+
+    // Bounds check: clamp sub-image to matrix dimensions
+    if (tbiImageX < 0)
+      tbiImageX = 0;
+    if (tbiImageY < 0)
+      tbiImageY = 0;
+    if (tbiImageX >= kWidth)
+      tbiImageX = kWidth - 1;
+    if (tbiImageY >= kHeight)
+      tbiImageY = kHeight - 1;
+    if (tbiImageX + tbiWidth > kWidth)
+      tbiWidth = kWidth - tbiImageX;
+    if (tbiImageY + tbiHeight > kHeight)
+      tbiHeight = kHeight - tbiImageY;
+
+    boolean localColorTable = ((tbiPackedBits & kColorTableFlag) != 0);
     if (localColorTable)
     {
       int colorBits = ((tbiPackedBits & 7) + 1);
       colorCount = 1 << colorBits;
-      int colorTableBytes = sizeof(_RGB) * colorCount;
+      int colorTableBytes = sizeof(RGB) * colorCount;
       readIntoBuffer(gifPalette, colorTableBytes);
     }
 
     if (keyFrame)
     {
-      if (transparentColorIndex == NO_TRANSPARENT_INDEX)
+      if (transparentColorIndex == kNoTransparentIndex)
       {
         fillImageData(lsdBackgroundIndex);
       }
@@ -232,33 +368,33 @@ public:
 
       rectX = 0;
       rectY = 0;
-      rectWidth = WIDTH;
-      rectHeight = HEIGHT;
+      rectWidth = kWidth;
+      rectHeight = kHeight;
     }
 
-    if ((prevDisposalMethod != DISPOSAL_NONE) && (prevDisposalMethod != DISPOSAL_LEAVE))
+    if ((prevDisposalMethod != kDisposalNone) && (prevDisposalMethod != kDisposalLeave))
     {
       memset(FrameBuffer, 0, sizeof(FrameBuffer));
     }
 
-    if (prevDisposalMethod == DISPOSAL_BACKGROUND)
+    if (prevDisposalMethod == kDisposalBackground)
     {
       fillImageDataRect(prevBackgroundIndex, rectX, rectY, rectWidth, rectHeight);
     }
-    else if (prevDisposalMethod == DISPOSAL_RESTORE)
+    else if (prevDisposalMethod == kDisposalRestore)
     {
       copyImageDataRect(imageDataBU, imageData, rectX, rectY, rectWidth, rectHeight);
     }
     prevDisposalMethod = disposalMethod;
-    if (disposalMethod != DISPOSAL_NONE)
+    if (disposalMethod != kDisposalNone)
     {
       rectX = tbiImageX;
       rectY = tbiImageY;
       rectWidth = tbiWidth;
       rectHeight = tbiHeight;
-      if (disposalMethod == DISPOSAL_BACKGROUND)
+      if (disposalMethod == kDisposalBackground)
       {
-        if (transparentColorIndex != NO_TRANSPARENT_INDEX)
+        if (transparentColorIndex != kNoTransparentIndex)
         {
           prevBackgroundIndex = transparentColorIndex;
         }
@@ -267,7 +403,7 @@ public:
           prevBackgroundIndex = lsdBackgroundIndex;
         }
       }
-      else if (disposalMethod == DISPOSAL_RESTORE)
+      else if (disposalMethod == kDisposalRestore)
       {
         copyImageDataRect(imageData, imageDataBU, rectX, rectY, rectWidth, rectHeight);
       }
@@ -285,8 +421,7 @@ public:
       }
       else
       {
-        int i;
-        for (i = 0; i < dataBlockSize; i++)
+        for (int i = 0; i < dataBlockSize; i++)
           file.read();
       }
 
@@ -296,8 +431,8 @@ public:
     lzw_decode_init(lzwCodeSize, lzwImageData);
     decompressAndDisplayFrame();
     redrawLastFrame();
-    transparentColorIndex = NO_TRANSPARENT_INDEX;
-    disposalMethod = DISPOSAL_NONE;
+    transparentColorIndex = kNoTransparentIndex;
+    disposalMethod = kDisposalNone;
     if (frameDelay < 1)
     {
       frameDelay = 1;
@@ -306,34 +441,7 @@ public:
     return frameDelay * 10;
   }
 
-#define LZW_MAXBITS 10
-#define LZW_SIZTABLE (1 << LZW_MAXBITS)
-  unsigned int mask[17] = {
-      0x0000, 0x0001, 0x0003, 0x0007,
-      0x000F, 0x001F, 0x003F, 0x007F,
-      0x00FF, 0x01FF, 0x03FF, 0x07FF,
-      0x0FFF, 0x1FFF, 0x3FFF, 0x7FFF,
-      0xFFFF};
-
-  byte *pbuf;
-  int bbits;
-  int bbuf;
-  int cursize; // The current code size
-  int curmask;
-  int codesize;
-  int clear_code;
-  int end_code;
-  int newcodes; // First available code
-  int top_slot; // Highest code for current size
-  int extra_slot;
-  int slot; // Last read code
-  int fc, oc;
-  int bs; // Current buffer size for GIF
-  byte *sp;
-  byte stack[LZW_SIZTABLE];
-  byte suffix[LZW_SIZTABLE];
-  unsigned int prefix[LZW_SIZTABLE];
-
+  // --- LZW decoder ---
   void lzw_decode_init(int csize, byte *buf)
   {
     pbuf = buf;
@@ -342,7 +450,7 @@ public:
     bs = 0;
     codesize = csize;
     cursize = codesize + 1;
-    curmask = mask[cursize];
+    curmask = kMask[cursize];
     top_slot = 1 << cursize;
     clear_code = 1 << codesize;
     end_code = clear_code + 1;
@@ -386,7 +494,7 @@ public:
         *buf++ = *(--sp);
         if ((--l) == 0)
         {
-          goto the_end;
+          return len - l;
         }
       }
       c = lzw_get_code();
@@ -397,17 +505,18 @@ public:
       else if (c == clear_code)
       {
         cursize = codesize + 1;
-        curmask = mask[cursize];
+        curmask = kMask[cursize];
         slot = newcodes;
         top_slot = 1 << cursize;
         fc = oc = -1;
       }
       else
       {
-
         code = c;
         if ((code == slot) && (fc >= 0))
         {
+          if (sp >= stack + kLzwTableSize)
+            return len - l;
           *sp++ = fc;
           code = oc;
         }
@@ -417,9 +526,15 @@ public:
         }
         while (code >= newcodes)
         {
+          if (sp >= stack + kLzwTableSize)
+            return len - l;
+          if (code < 0 || code >= kLzwTableSize)
+            return len - l;
           *sp++ = suffix[code];
           code = prefix[code];
         }
+        if (sp >= stack + kLzwTableSize)
+          return len - l;
         *sp++ = code;
         if ((slot < top_slot) && (oc >= 0))
         {
@@ -430,42 +545,25 @@ public:
         oc = c;
         if (slot >= top_slot)
         {
-          if (cursize < LZW_MAXBITS)
+          if (cursize < kLzwMaxBits)
           {
             top_slot <<= 1;
-            curmask = mask[++cursize];
-          }
-          else
-          {
+            curmask = kMask[++cursize];
           }
         }
       }
     }
     end_code = -1;
-  the_end:
     return len - l;
   }
 
   void redrawLastFrame()
   {
-    for (int y = 0; y < lsdHeight; y++)
+    for (int y = 0; y < lsdHeight && y < kHeight; y++)
     {
-      if (y >= sizeof(FrameBuffer) / sizeof(FrameBuffer[0]))
+      for (int x = 0; x < lsdWidth && x < kWidth; x++)
       {
-        // y is out of bounds for FrameBuffer
-        break;
-      }
-
-      for (int x = 0; x < lsdWidth; x++)
-      {
-        if (x >= sizeof(FrameBuffer[0]) / sizeof(FrameBuffer[0][0]))
-        {
-          // x is out of bounds for FrameBuffer
-          break;
-        }
-        int xDraw = x + offsetX;
-        int yDraw = y + offsetY;
-        mtx->drawPixel(xDraw, yDraw, FrameBuffer[y][x]);
+        mtx->drawPixel(x + offsetX, y + offsetY, FrameBuffer[y][x]);
       }
     }
   }
@@ -474,38 +572,37 @@ public:
   {
     if (tbiInterlaced)
     {
-      for (int line = tbiImageY + 0; line < tbiHeight + tbiImageY; line += 8)
+      for (int line = tbiImageY; line < tbiHeight + tbiImageY && line < kHeight; line += 8)
       {
-        lzw_decode(imageData + (line * WIDTH) + tbiImageX, tbiWidth);
+        lzw_decode(imageData + (line * kWidth) + tbiImageX, tbiWidth);
       }
-      for (int line = tbiImageY + 4; line < tbiHeight + tbiImageY; line += 8)
+      for (int line = tbiImageY + 4; line < tbiHeight + tbiImageY && line < kHeight; line += 8)
       {
-        lzw_decode(imageData + (line * WIDTH) + tbiImageX, tbiWidth);
+        lzw_decode(imageData + (line * kWidth) + tbiImageX, tbiWidth);
       }
-      for (int line = tbiImageY + 2; line < tbiHeight + tbiImageY; line += 4)
+      for (int line = tbiImageY + 2; line < tbiHeight + tbiImageY && line < kHeight; line += 4)
       {
-        lzw_decode(imageData + (line * WIDTH) + tbiImageX, tbiWidth);
+        lzw_decode(imageData + (line * kWidth) + tbiImageX, tbiWidth);
       }
-      for (int line = tbiImageY + 1; line < tbiHeight + tbiImageY; line += 2)
+      for (int line = tbiImageY + 1; line < tbiHeight + tbiImageY && line < kHeight; line += 2)
       {
-        lzw_decode(imageData + (line * WIDTH) + tbiImageX, tbiWidth);
+        lzw_decode(imageData + (line * kWidth) + tbiImageX, tbiWidth);
       }
     }
     else
     {
-      for (int line = tbiImageY; line < tbiHeight + tbiImageY; line++)
+      for (int line = tbiImageY; line < tbiHeight + tbiImageY && line < kHeight; line++)
       {
-        lzw_decode(imageData + (line * WIDTH) + tbiImageX, tbiWidth);
+        lzw_decode(imageData + (line * kWidth) + tbiImageX, tbiWidth);
       }
     }
 
-    int pixel, yOffset;
-    for (int y = tbiImageY; y < tbiHeight + tbiImageY; y++)
+    for (int y = tbiImageY; y < tbiHeight + tbiImageY && y < kHeight; y++)
     {
-      yOffset = y * WIDTH;
-      for (int x = tbiImageX; x < tbiWidth + tbiImageX; x++)
+      int yOffset = y * kWidth;
+      for (int x = tbiImageX; x < tbiWidth + tbiImageX && x < kWidth; x++)
       {
-        pixel = imageData[yOffset + x];
+        int pixel = imageData[yOffset + x];
         if (pixel != transparentColorIndex)
         {
           CRGB color;
@@ -516,7 +613,7 @@ public:
         }
         else
         {
-          if (disposalMethod == DISPOSAL_BACKGROUND)
+          if (disposalMethod == kDisposalBackground)
           {
             FrameBuffer[y][x] = CRGB::Black;
           }
@@ -527,153 +624,67 @@ public:
     lastFrameTime = millis();
   }
 
-public:
-  void setMatrix(FastLED_NeoMatrix *matrix)
-  {
-    mtx = matrix;
-  }
-
-  uint8_t getFrame()
-  {
-    return currentFrame;
-  }
-
-  int playGif(int x, int y, File *imageFile, uint32_t frame = 0)
-  {
-    offsetX = x;
-    offsetY = y;
-
-    if (imageFile->name() == file.name())
-    {
-      drawFrame();
-      return lsdWidth;
-    }
-    else
-    {
-      currentFrame = 0;
-      file = *imageFile;
-
-      memset(FrameBuffer, 0, sizeof(FrameBuffer));
-      memset(gifPalette, 0, sizeof(gifPalette));
-      memset(lzwImageData, 0, sizeof(lzwImageData));
-      memset(imageData, 0, sizeof(imageData));
-      memset(imageDataBU, 0, sizeof(imageDataBU));
-      memset(stack, 0, sizeof(stack));
-      memset(suffix, 0, sizeof(suffix));
-      memset(prefix, 0, sizeof(prefix));
-      if (frame != 0)
-      {
-
-        parseGifHeader();
-        parseLogicalScreenDescriptor();
-        parseGlobalColorTable();
-        do
-        {
-          drawFrame(true);
-        } while (currentFrame < frame);
-      }
-      else
-      {
-        parseGifHeader();
-        parseLogicalScreenDescriptor();
-        parseGlobalColorTable();
-        drawFrame();
-      }
-    }
-    return lsdWidth;
-  }
-
-  boolean parseGifHeader()
-  {
-    char buffer[10];
-    readIntoBuffer(buffer, GIFHDRSIZE);
-    if ((strncmp(buffer, GIFHDRTAGNORM, GIFHDRSIZE) != 0) &&
-        (strncmp(buffer, GIFHDRTAGNORM1, GIFHDRSIZE) != 0))
-    {
-      return false;
-    }
-    else
-    {
-      return true;
-    }
-  }
-
-  void parseLogicalScreenDescriptor()
-  {
-    lsdWidth = readWord();
-    lsdHeight = readWord();
-    lsdPackedField = readByte();
-    lsdBackgroundIndex = readByte();
-    lsdAspectRatio = readByte();
-  }
-
-  void parseGlobalColorTable()
-  {
-    if (lsdPackedField & COLORTBLFLAG)
-    {
-      colorCount = 1 << ((lsdPackedField & 7) + 1);
-      int colorTableBytes = sizeof(_RGB) * colorCount;
-      readIntoBuffer(gifPalette, colorTableBytes);
-    }
-  }
-
+  // Iterative (not recursive) — max 1 rewind per call
   unsigned long drawFrame(bool force = false)
   {
-
     if (!force)
     {
-      if (millis() - lastFrameTime < newframeDelay)
+      if (millis() - lastFrameTime < (unsigned long)newframeDelay)
       {
         redrawLastFrame();
         return 0;
       }
     }
 
-    lastFrameDrawn = false;
-
-    boolean done = false;
-    while (!done)
+    for (int rewindAttempts = 0; rewindAttempts < 2; rewindAttempts++)
     {
-      byte b = readByte();
-      if (b == 0x2c)
+      bool rewound = false;
+      while (!rewound)
       {
-        parseTableBasedImage();
-        return 0;
-      }
-      else if (b == 0x21)
-      {
-        b = readByte();
-        switch (b)
+        int b = readByte();
+        if (b < 0)
         {
-        case 0x01:
-          parsePlainTextExtension();
-          break;
-        case 0xf9:
-          parseGraphicControlExtension();
-          break;
-        case 0xfe:
-          parseCommentExtension();
-          break;
-        case 0xff:
-          parseApplicationExtension();
-          break;
-        default:
-          return ERROR_UNKNOWNCONTROLEXT;
+          return kErrorBadGifFormat;
+        }
+        if (b == 0x2c)
+        {
+          parseTableBasedImage();
+          return 0;
+        }
+        else if (b == 0x21)
+        {
+          b = readByte();
+          switch (b)
+          {
+          case 0x01:
+            parsePlainTextExtension();
+            break;
+          case 0xf9:
+            parseGraphicControlExtension();
+            break;
+          case 0xfe:
+            parseCommentExtension();
+            break;
+          case 0xff:
+            parseApplicationExtension();
+            break;
+          default:
+            return kErrorUnknownControlExt;
+          }
+        }
+        else
+        {
+          // End of GIF data — rewind and try once more
+          rewound = true;
+          file.seek(0);
+          currentFrame = 0;
+          initGifFromFile();
         }
       }
-      else
-      {
-        done = true;
-        file.seek(0);
-        currentFrame = 0;
-        parseGifHeader();
-        parseLogicalScreenDescriptor();
-        parseGlobalColorTable();
-        drawFrame();
-        return ERROR_FINISHED;
-      }
     }
-    return ERROR_NON;
+
+    return kErrorBadGifFormat;
   }
 };
+
 #endif
