@@ -17,7 +17,7 @@ bool jpg_output(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t *bitmap)
       matrix->drawPixel(x + col, y + row, bitmap[bitmapIndex++]);
     }
   }
-  return 0;
+  return false;
 }
 
 // --- DisplayManager_ drawing methods ---
@@ -95,6 +95,8 @@ void DisplayManager_::drawBarChart(int16_t x, int16_t y, const int data[], byte 
 
 void DisplayManager_::drawLineChart(int16_t x, int16_t y, const int data[], byte dataSize, bool withIcon, uint32_t color)
 {
+  if (dataSize < 2)
+    return;
   int availableWidth = withIcon ? (32 - 9) : 32;
   int startX = withIcon ? 9 : 0;
   float xStep = static_cast<float>(availableWidth) / static_cast<float>(dataSize - 1);
@@ -208,11 +210,14 @@ void DisplayManager_::processDrawInstructions(int16_t xOffset, int16_t yOffset, 
         int y = params[1].as<int>();
         int width = params[2].as<int>();
         int height = params[3].as<int>();
-        std::vector<uint32_t> bitmap(width * height);
+        size_t bitmapSize = width * height;
+        std::vector<uint32_t> bitmap(bitmapSize);
         JsonArray colorArray = params[4].as<JsonArray>();
         size_t i = 0;
         for (const auto &color : colorArray)
         {
+          if (i >= bitmapSize)
+            break;
           bitmap[i] = color.as<uint32_t>();
           i++;
         }

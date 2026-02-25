@@ -9,7 +9,6 @@
 #include <LittleFS.h>
 #include "base64.hpp"
 #include "Overlays.h"
-#include "ServerManager.h"
 
 void pushCustomApp(String name, int position)
 {
@@ -499,9 +498,10 @@ void DisplayManager_::updateAppVector(const char *json)
   }
 
   JsonArray appArray;
+  DynamicJsonDocument wrapperDoc(2048);
   if (doc.is<JsonObject>())
   {
-    JsonArray tempArray = doc.to<JsonArray>();
+    JsonArray tempArray = wrapperDoc.to<JsonArray>();
     tempArray.add(doc.as<JsonObject>());
     appArray = tempArray;
   }

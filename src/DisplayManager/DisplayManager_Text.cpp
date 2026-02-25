@@ -21,10 +21,9 @@ uint32_t interpolateColor(uint32_t color1, uint32_t color2, float t)
   uint8_t g2 = (color2 >> 8) & 0xFF;  // G-Komponente aus Farbe 2
   uint8_t b2 = color2 & 0xFF;         // B-Komponente aus Farbe 2
 
-  // Interpolation für jede Farbkomponente
-  uint8_t r_interp = r1 + (r2 - r1) * t;
-  uint8_t g_interp = g1 + (g2 - g1) * t;
-  uint8_t b_interp = b1 + (b2 - b1) * t;
+  uint8_t r_interp = (uint8_t)((1.0f - t) * r1 + t * r2);
+  uint8_t g_interp = (uint8_t)((1.0f - t) * g1 + t * g2);
+  uint8_t b_interp = (uint8_t)((1.0f - t) * b1 + t * b2);
 
   return (r_interp << 16) | (g_interp << 8) | b_interp;
 }
@@ -79,8 +78,6 @@ void DisplayManager_::HSVtext(int16_t x, int16_t y, const char *text, bool clear
   {
     uint8_t hue = map(i, 0, strlen(text), 0, 360) + hueOffset;
     setTextColor(hsvToRgb(hue, 255, 255));
-    const char *myChar = &text[i];
-
     setCursor(xpos + x, y);
     if ((UPPERCASE_LETTERS && textCase == 0) || textCase == 1)
     {
@@ -109,8 +106,7 @@ void DisplayManager_::GradientText(int16_t x, int16_t y, const char *text, int c
 
   for (uint16_t i = 0; i < textLength; i++)
   {
-    // Bestimme den Interpolationswert basierend auf der aktuellen Position i im Text
-    float t = (float)i / (textLength - 1);
+    float t = (textLength > 1) ? (float)i / (textLength - 1) : 0.0f;
 
     // Bestimme die Farbe für das aktuelle Zeichen basierend auf dem Farbverlauf
     uint32_t TC = interpolateColor(color1, color2, t);
@@ -189,7 +185,6 @@ void DisplayManager_::matrixPrint(const char *str)
     }
     else if (c >= AwtrixFont.first && c <= AwtrixFont.last)
     {
-      GFXglyph *glyph = &AwtrixFont.glyph[c - AwtrixFont.first];
       matrixPrint(c);
     }
   }
@@ -264,11 +259,10 @@ void DisplayManager_::matrixPrint(char *str)
 
 void DisplayManager_::matrixPrint(char str[], size_t length)
 {
-  size_t Tlength = strlen(str);
-  char temp[Tlength + 1]; // +1 für Nullterminator
-  strncpy(temp, str, Tlength);
-  temp[Tlength] = '\0'; // Nullterminator hinzufügen
-  matrixPrint(temp);
+  char temp[length + 1];
+  strncpy(temp, str, length);
+  temp[length] = '\0';
+  matrixPrint(static_cast<const char *>(temp));
 }
 
 void DisplayManager_::setCursor(int16_t x, int16_t y)

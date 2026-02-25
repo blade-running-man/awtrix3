@@ -314,7 +314,6 @@ String DisplayManager_::getSettings()
   doc["CCORRECTION"] = CRGBtoHex(COLOR_CORRECTION);
   doc["CTEMP"] = CRGBtoHex(COLOR_TEMPERATURE);
   doc["WD"] = SHOW_WEEKDAY;
-  doc["TEFF"] = TRANS_EFFECT;
   doc["WDCA"] = WDC_ACTIVE;
   doc["WDCI"] = WDC_INACTIVE;
   doc["TIME_COL"] = TIME_COLOR;

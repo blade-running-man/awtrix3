@@ -3,7 +3,6 @@
 #include "Globals.h"
 #include "Functions.h"
 #include "effects.h"
-#include "Dictionary.h"
 #include <ArduinoJson.h>
 #include <ArtnetWifi.h>
 
@@ -11,11 +10,8 @@ const int numberOfChannels = 256 * 3;
 const int startUniverse = 0;
 const int maxUniverses = numberOfChannels / 512 + ((numberOfChannels % 512) ? 1 : 0);
 bool universesReceived[maxUniverses];
-bool sendFrame = 1;
+bool sendFrame = true;
 int previousDataLength = 0;
-uint8_t received_packets = 0;
-bool universe1_complete = false;
-bool universe2_complete = false;
 
 void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t *data)
 {
@@ -45,7 +41,7 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t *d
   for (int i = 0; i < length / 3; i++)
   {
     int led = i + (universe - startUniverse) * (previousDataLength / 3);
-    if (led < 256)
+    if (led < MATRIX_WIDTH * MATRIX_HEIGHT)
       matrix->drawPixel(led % matrix->width(), led / matrix->width(), matrix->Color(data[i * 3], data[i * 3 + 1], data[i * 3 + 2]));
   }
   previousDataLength = length;

@@ -10,6 +10,7 @@
 #include <ArduinoJson.h>
 #include "Apps.h"
 #include "Functions.h"
+#include "effects.h"
 
 // Matrix dimensions
 #define MATRIX_WIDTH 32
@@ -178,7 +179,7 @@ void parseCommonDisplayFields(T &target, JsonObject &doc)
       }
       *dataSize = index;
 
-      if (autoscale)
+      if (autoscale && maximum > 0)
       {
         for (int j = 0; j < *dataSize; j++)
         {
