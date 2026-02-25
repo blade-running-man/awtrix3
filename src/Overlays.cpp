@@ -62,19 +62,27 @@ void NotifyOverlay(FastLED_NeoMatrix *matrix, MatrixDisplayUiState *state, GifPl
         {
             notifications[1].startime = millis();
         }
+        bool wakeup = notifications[0].wakeup;
         notifications[0].icon.close();
         notifications.erase(notifications.begin());
-
-        if (notifications[0].wakeup && MATRIX_OFF)
-        {
-            DisplayManager.setBrightness(0);
-        }
 
         if (notifications.empty())
         {
             notifyFlag = false;
+            if (wakeup && MATRIX_OFF)
+            {
+                DisplayManager.setBrightness(0);
+            }
             if (AUTO_TRANSITION)
                 DisplayManager.forceNextApp();
+        }
+        else if (notifications[0].wakeup && MATRIX_OFF)
+        {
+            // Next notification also has wakeup — keep brightness
+        }
+        else if (wakeup && MATRIX_OFF)
+        {
+            DisplayManager.setBrightness(0);
         }
 
         return;
