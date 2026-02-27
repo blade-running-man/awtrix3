@@ -87,7 +87,7 @@ void addHandler()
     mws.addHandler("/api/transitions", HTTP_GET, []()
                    { mws.webserver->send_P(200, "application/json", DisplayManager.getTransitionNames().c_str()); });
     mws.addHandler("/api/reboot", HTTP_ANY, []()
-                   { mws.webserver->send(200,F("text/plain"),F("OK")); delay(200); ESP.restart(); });
+                   { mws.webserver->send(200,F("text/plain"),F("OK")); mws.webserver->client().flush(); delay(200); ESP.restart(); });
     mws.addHandler("/api/rtttl", HTTP_POST, []()
                    { mws.webserver->send(200,F("text/plain"),F("OK")); PeripheryManager.playRTTTLString(mws.webserver->arg("plain").c_str()); });
     mws.addHandler("/api/sound", HTTP_POST, []()
@@ -153,9 +153,9 @@ void addHandler()
     mws.addHandler("/api/settings", HTTP_POST, []()
                    { DisplayManager.setNewSettings(mws.webserver->arg("plain").c_str()); mws.webserver->send(200,F("text/plain"),F("OK")); });
     mws.addHandler("/api/erase", HTTP_ANY, []()
-                   { ServerManager.erase();  mws.webserver->send(200,F("text/plain"),F("OK"));delay(200); ESP.restart(); });
+                   { ServerManager.erase();  mws.webserver->send(200,F("text/plain"),F("OK")); mws.webserver->client().flush(); delay(200); ESP.restart(); });
     mws.addHandler("/api/resetSettings", HTTP_ANY, []()
-                   { formatSettings();   mws.webserver->send(200,F("text/plain"),F("OK"));delay(200); ESP.restart(); });
+                   { formatSettings();   mws.webserver->send(200,F("text/plain"),F("OK")); mws.webserver->client().flush(); delay(200); ESP.restart(); });
     mws.addHandler("/api/reorder", HTTP_POST, []()
                    { DisplayManager.reorderApps(mws.webserver->arg("plain").c_str()); mws.webserver->send(200,F("text/plain"),F("OK")); });
     mws.addHandler("/api/settings", HTTP_GET, []()
